@@ -1,5 +1,4 @@
 // index.js
-require("dotenv").config(); // اختياري لو شغال محليًا فقط
 
 const express = require("express");
 const axios = require("axios");
