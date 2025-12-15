@@ -1,32 +1,23 @@
-const express = require("express");
-const app = express();
-
-app.use(express.json());
-
-app.get("/", (req, res) => {
-  res.send("Server is running");
-});
-
-app.get("/webhook", (req, res) => {
-  const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
-
-  const mode = req.query["hub.mode"];
-  const token = req.query["hub.verify_token"];
-  const challenge = req.query["hub.challenge"];
-
-  if (mode === "subscribe" && token === VERIFY_TOKEN) {
-    return res.status(200).send(challenge);
-  } else {
-    return res.sendStatus(403);
-  }
-});
-
 app.post("/webhook", (req, res) => {
-  console.log("Incoming webhook:", JSON.stringify(req.body, null, 2));
-  res.sendStatus(200);
-});
+  const entry = req.body.entry;
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log("Server running on port", PORT);
+  if (entry && entry.length > 0) {
+    const changes = entry[0].changes;
+
+    if (changes && changes.length > 0) {
+      const value = changes[0].value;
+
+      if (value.messages && value.messages.length > 0) {
+        const message = value.messages[0];
+
+        const from = message.from; // رقم اللي باعت
+        const text = message.text?.body;
+
+        console.log("📩 Message from:", from);
+        console.log("💬 Text:", text);
+      }
+    }
+  }
+
+  res.sendStatus(200);
 });
