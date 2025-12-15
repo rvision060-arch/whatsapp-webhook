@@ -41,4 +41,3 @@ async function sendMessage(to, text) {
     }
   );
 }
-npm install axios
