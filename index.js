@@ -1,83 +1,70 @@
-// index.js
-
 const express = require("express");
 const axios = require("axios");
 
 const app = express();
-
-// لازم علشان نقرأ body من WhatsApp
 app.use(express.json());
 
-// Route رئيسي للاختبار
-app.get("/", (req, res) => {
-  res.send("Server is running");
-});
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
+const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;      // Bearer token
+const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;    // from Meta
 
-// ✅ Webhook Verify (GET)
+app.get("/", (req, res) => res.send("Server is running"));
+
 app.get("/webhook", (req, res) => {
-  const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
-
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
-  if (mode === "subscribe" && token === VERIFY_TOKEN) {
-    console.log("✅ Webhook verified");
-    return res.status(200).send(challenge);
-  }
+  if (mode === "subscribe" && token === VERIFY_TOKEN) return res.status(200).send(challenge);
   return res.sendStatus(403);
 });
 
-// ✅ استقبال رسائل واتساب (POST) + رد تلقائي
+async function sendWhatsAppText(to, text) {
+  const url = `https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`;
+
+  await axios.post(
+    url,
+    {
+      messaging_product: "whatsapp",
+      to,
+      type: "text",
+      text: { body: text },
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+}
+
 app.post("/webhook", async (req, res) => {
   try {
-    console.log("Incoming webhook:", JSON.stringify(req.body, null, 2));
+    // لازم نرجّع 200 بسرعة
+    res.sendStatus(200);
 
     const entry = req.body?.entry?.[0];
-    const changes = entry?.changes?.[0];
-    const value = changes?.value;
+    const change = entry?.changes?.[0];
+    const value = change?.value;
 
-    // الرسالة اللي جت
-    const message = value?.messages?.[0];
-    if (!message) return res.sendStatus(200); // ممكن يكون status update
+    // تجاهل status updates
+    const msg = value?.messages?.[0];
+    if (!msg) return;
 
-    const from = message.from; // رقم العميل (wa_id)
-    const text = message?.text?.body || "";
+    const from = msg.from; // رقم اللي بعت
+    const text = msg.type === "text" ? msg.text?.body : `[${msg.type}]`;
 
     console.log("📩 Message from:", from);
     console.log("💬 Text:", text);
 
-    const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
-    const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
-
-    if (!PHONE_NUMBER_ID || !WHATSAPP_TOKEN) {
-      console.log("⚠️ Missing PHONE_NUMBER_ID or WHATSAPP_TOKEN in env variables");
-      return res.sendStatus(200);
-    }
-
-    // ✅ رد تلقائي (Echo)
-    await axios.post(
-      `https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`,
-      {
-        messaging_product: "whatsapp",
-        to: from,
-        text: { body: `وصلت رسالتك ✅\nقلت: ${text}` },
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    return res.sendStatus(200);
+    // رد بسيط
+    await sendWhatsAppText(from, `وصلتني رسالتك ✅\nانت قلت: ${text}`);
+    console.log("✅ Replied successfully");
   } catch (err) {
-    console.error("❌ Error:", err.response?.data || err.message);
-    return res.sendStatus(200);
+    console.error("❌ Webhook error:", err?.response?.data || err.message);
   }
 });
 
-// Railway بيدي PORT تلقائي
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("Server running on port", PORT));
