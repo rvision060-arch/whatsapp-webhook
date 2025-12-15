@@ -16,8 +16,9 @@ app.get("/webhook", (req, res) => {
 
   if (mode === "subscribe" && token === VERIFY_TOKEN) {
     return res.status(200).send(challenge);
+  } else {
+    return res.sendStatus(403);
   }
-  return res.sendStatus(403);
 });
 
 app.post("/webhook", (req, res) => {
